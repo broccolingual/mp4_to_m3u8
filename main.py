@@ -3,6 +3,7 @@ import subprocess
 import codecs
 import glob
 import re
+import time
 
 class HLS:
     def __init__(self, path):
@@ -114,6 +115,7 @@ if __name__ == "__main__":
     files = glob.glob(f"{path}/**/*.mp4", recursive=True)
     print(f"Number of Files: {len(files)}")
 
+    start = time.time()
     for file in files:
         print(f"File Path: {file}")
         try:
@@ -121,6 +123,9 @@ if __name__ == "__main__":
             hls.create_hls_high()
         except Exception as e:
             print(e)
+    end = time.time()
+    elapsed_time = end-start
+    print(f"Elapsed Time: {elapsed_time}[sec]")
     
     # run server(localhost:3000)
     subprocess.call(f"python -m http.server 3000 --directory {path}/hls")
