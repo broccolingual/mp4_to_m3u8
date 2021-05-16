@@ -7,20 +7,16 @@ import time
 
 class HLS:
     def __init__(self, path):
-        self.path = path.replace(os.sep, '/')
-        self.path_separater = "\\"
+        self.path = path
+        self.root = os.path.dirname(self.path)
         self.hls_path = self._get_hls_path()
 
-    def get_filename(self, filename):
-        m = re.match(r"(?P<filename>.*)\.(?P<extension>[a-zA-Z0-9_]+)", filename)
-        if m:
-            return m.group('filename'), m.group('extension')
+    def get_filename(self):
+        root, ext = os.path.splitext(os.path.basename(self.path))
+        return root, ext
 
     def _get_hls_path(self):
-        l = self.path.split("/")
-        filename, _ = self.get_filename(l[-1])
-        l.pop(-1)
-        return f"{'/'.join(l)}/hls/{filename}"
+        return os.path.join(self.root, 'hls', self.get_filename()[0])
 
     def _create_thumbnail(self):
         os.makedirs(self.hls_path, exist_ok=True)
@@ -28,14 +24,16 @@ class HLS:
         c = 'ffmpeg'
         c += f' -i {self.path}'
         c += f' -vf thumbnail -frames:v 1'
-        c += f' {self.hls_path}/thumb.jpg'
+        c += f' {os.path.join(self.hls_path, "thumb.jpg")}'
 
         subprocess.call(c.split())
 
     def _create_high_resolution_m3u8(self, segment_time=2):
-        l = self.path.split("/")
-        filename, _ = self.get_filename(l[-1])
-        l.pop(-1)
+        filename, ext = self.get_filename()
+
+        if ext != ".mp4":
+            return
+
         os.makedirs(f"{self.hls_path}/h", exist_ok=True)
 
         c = "ffmpeg"
@@ -45,49 +43,40 @@ class HLS:
         c += f" -segment_list {self.hls_path}/h/{filename}_h.m3u8"
         c += f" {self.hls_path}/h/{filename}_h_%5d.ts"
 
-        code = subprocess.call(c.split())
-        # print('process=' + str(code))
+        subprocess.call(c.split())
 
     def _create_low_resolution_mp4(self):
-        l = self.path.split("/")
-        filename, extention = self.get_filename(l[-1])
-        l.pop(-1)
+        filename, ext = self.get_filename()
 
         c = 'ffmpeg'
         c += f' -i {self.path}'
         c += ' -f mp4 -vcodec h264 -vb 500k -s 640x360 -pix_fmt yuv420p'
         c += ' -ac 2 -ar 48000 -ab 128k -acodec aac -strict experimental'
         c += ' -movflags faststart'
-        c += f' {"/".join(l)}/{filename}_low.{extention}'
+        c += f' {self.root}/{filename}_low.{ext}'
 
-        code = subprocess.call(c.split())
-        # print('process=' + str(code))
+        subprocess.call(c.split())
 
     def _create_low_resolution_m3u8(self, segment_time=2):
-        l = self.path.split("/")
-        filename, extention = self.get_filename(l[-1])
-        l.pop(-1)
+        filename, ext = self.get_filename()
         os.makedirs(f"{self.hls_path}/l", exist_ok=True)
 
         c = 'ffmpeg'
-        c += f' -i {"/".join(l)}/{filename}_low.{extention}'
+        c += f' -i {self.root}/{filename}_low.{ext}'
         c += ' -codec copy -vbsf h264_mp4toannexb -map 0'
         c += f' -f segment -segment_format mpegts -segment_time {segment_time}'
         c += f' -segment_list {self.hls_path}/l/{filename}_l.m3u8'
         c += f' {self.hls_path}/l/{filename}_l_%5d.ts'
 
-        code = subprocess.call(c.split())
-        # print('process=' + str(code))
+        subprocess.call(c.split())
 
-        os.remove(f'{"/".join(l)}/{filename}_low.{extention}')
+        os.remove(f'{self.root}/{filename}_low.{ext}')
 
     def create_hls_high(self):
         self._create_thumbnail()
         self._create_high_resolution_m3u8(segment_time=5)
 
-        l = self.path.split("/")
-        filename, _ = self.get_filename(l[-1])
-        l.pop(-1)
+        filename, ext = self.get_filename()
         os.makedirs(self.hls_path, exist_ok=True)
 
         t = '#EXTM3U'
@@ -105,9 +94,7 @@ class HLS:
         self._create_low_resolution_mp4()
         self._create_low_resolution_m3u8()
 
-        l = self.path.split("/")
-        filename, _ = self.get_filename(l[-1])
-        l.pop(-1)
+        filename, ext = self.get_filename()
         os.makedirs(self.hls_path, exist_ok=True)
 
         t = '#EXTM3U'
@@ -125,6 +112,7 @@ class HLS:
 if __name__ == "__main__":
     path = sys.argv[1]
     print(path)
+
     files = glob.glob(f"{path}/**/*.mp4", recursive=True)
     print(f"Number of Files: {len(files)}")
 
